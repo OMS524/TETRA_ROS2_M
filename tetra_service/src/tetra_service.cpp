@@ -1,6 +1,5 @@
 #include "rclcpp/rclcpp.hpp"
 // nav2 msg//
-#include "nav2_amcl/amcl_node.hpp"
 #include "nav2_msgs/msg/particle.hpp"
 #include "nav2_msgs/msg/particle_cloud.hpp"
 #include "nav2_msgs/srv/clear_entire_costmap.hpp"
@@ -71,6 +70,7 @@
 #include <atomic>
 #include <chrono>
 #include <dirent.h>
+#include <filesystem>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,6 +86,20 @@ using namespace std::chrono_literals;
 #define MAX_RETRY_CNT 10
 #define BUF_LEN 4096
 int m_dHome_ID = 0;
+std::string location_directory;
+std::string landmark_directory;
+std::string map_directory;
+std::string script_directory;
+
+// The legacy GUI service runs user-provided scripts in a terminal.
+std::string shell_quote(const std::string &value) {
+  std::string quoted = "'";
+  for (const char c : value) {
+    if (c == '\'') quoted += "'\"'\"'";
+    else quoted += c;
+  }
+  return quoted + "'";
+}
 
 FILE *fp;
 int status;
@@ -278,7 +292,7 @@ typedef struct DYNAMIC_PARAM {
 DYNAMIC_PARAM _pDynamic_param;
 
 typedef struct DOCKING_POSE {
-  double camera_TF_distance = -0.3955;
+  double camera_TF_distance = -0.384;
   double target_yaw = 0.0;
   double target_distance = 0.0;
   double before_TF_Pose = 0.0;
@@ -480,8 +494,21 @@ public:
     nav_to_pose_action_client =
         rclcpp_action::create_client<NavigateToPose>(this, "navigate_to_pose");
 
+    const char *user_home = std::getenv("HOME");
+    const std::string home = user_home ? user_home : ".";
+    const std::string data_root = home + "/.ros/tetra";
+    location_directory = this->declare_parameter<std::string>("location_directory", data_root + "/locations");
+    landmark_directory = this->declare_parameter<std::string>("landmark_directory", data_root + "/landmarks");
+    map_directory = this->declare_parameter<std::string>("map_directory", data_root + "/maps");
+    script_directory = this->declare_parameter<std::string>("script_directory", home);
+    for (const auto &directory : {location_directory, landmark_directory, map_directory}) {
+      std::error_code error;
+      std::filesystem::create_directories(directory, error);
+      if (error) RCLCPP_WARN(this->get_logger(), "Cannot create %s: %s", directory.c_str(), error.message().c_str());
+    }
+
     // PARAM
-    this->declare_parameter("m_dHome_ID", rclcpp::PARAMETER_INTEGER);
+    this->declare_parameter("m_dHome_ID", 0);
     m_dHome_ID_param = this->get_parameter("m_dHome_ID");
     // Get Param
     m_dHome_ID = m_dHome_ID_param.as_int();
@@ -1029,7 +1056,7 @@ public:
       bResult = true;
     }
 
-    m_strFilePathName = "/home/tetra/LANDMARK/" + landmark_name + ".txt";
+    m_strFilePathName = landmark_directory + "/" + landmark_name + ".txt";
     fp = fopen(m_strFilePathName.c_str(), "r");
 
     if (_pAR_tag_pose.m_iApril_tag_id > 0 && fp == NULL) {
@@ -1189,7 +1216,7 @@ public:
     bool bResult = false;
 
     string m_strFilePathName;
-    m_strFilePathName = "/home/tetra/DATA/" + str_location + ".txt";
+    m_strFilePathName = location_directory + "/" + str_location + ".txt";
     fp = fopen(m_strFilePathName.c_str(), "w");
     if (fp == NULL) {
       printf("file is null \n");
@@ -1219,7 +1246,7 @@ public:
 
       bResult = true;
     } else {
-      m_strFilePathName = "/home/tetra/DATA/" + str_location + ".txt";
+      m_strFilePathName = location_directory + "/" + str_location + ".txt";
       fp = fopen(m_strFilePathName.c_str(), "r");
 
       if (fp != NULL) // File Open Check
@@ -1666,8 +1693,8 @@ public:
       const std::shared_ptr<interfaces::srv::SaveMap::Response> response) {
     bool bResult = false;
     // call rosrun command//
-    string str_command = "gnome-terminal -- /home/tetra/mapsave.sh ";
-    string str_command2 = str_command + request->map_name.c_str();
+    string str_command = "gnome-terminal -- " + shell_quote(script_directory + "/mapsave.sh") + " ";
+    string str_command2 = str_command + shell_quote(request->map_name);
     std::vector<char> writable1(str_command2.begin(), str_command2.end());
     writable1.push_back('\0');
     char *ptr1 = &writable1[0];
@@ -1684,9 +1711,9 @@ public:
 
     string m_strMapName_yaml;
     string m_strMapName_pgm;
-    m_strMapName_yaml = "/home/tetra/ros2_ws/src/tetra_navigation2/maps/" +
+    m_strMapName_yaml = map_directory + "/" +
                         request->map_name + ".yaml";
-    m_strMapName_pgm = "/home/tetra/ros2_ws/src/tetra_navigation2/maps/" +
+    m_strMapName_pgm = map_directory + "/" +
                        request->map_name + ".pgm";
 
     // yaml file erase
@@ -1713,7 +1740,7 @@ public:
       const std::shared_ptr<interfaces::srv::RunMapping::Response> response) {
     bool bResult = false;
 
-    string str_command = "gnome-terminal -- /home/tetra/mapping.sh ";
+    string str_command = "gnome-terminal -- " + shell_quote(script_directory + "/mapping.sh");
     std::vector<char> writable2(str_command.begin(), str_command.end());
     writable2.push_back('\0');
     char *ptr2 = &writable2[0];
@@ -1730,8 +1757,8 @@ public:
           response) {
     bool bResult = false;
     printf("Load Map Call _ %s \n", request->map_name.c_str());
-    string str_command = "gnome-terminal -- /home/tetra/navigation.sh ";
-    string str_command2 = str_command + request->map_name.c_str() + ".yaml";
+    string str_command = "gnome-terminal -- " + shell_quote(script_directory + "/navigation.sh") + " ";
+    string str_command2 = str_command + shell_quote(request->map_name + ".yaml");
     std::vector<char> writable3(str_command2.begin(), str_command2.end());
     writable3.push_back('\0');
     char *ptr3 = &writable3[0];

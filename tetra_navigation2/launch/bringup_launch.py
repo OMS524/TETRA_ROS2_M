@@ -27,14 +27,14 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
-from launch_ros.actions import PushROSNamespace
+from launch_ros.actions import PushRosNamespace
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import ReplaceString, RewrittenYaml
 
 
 def generate_launch_description():
     # Get the launch directory
-    bringup_dir = get_package_share_directory('tetra_bringup')
+    bringup_dir = get_package_share_directory('tetra_navigation2')
     launch_dir = os.path.join(bringup_dir, 'launch')
 
     # Create the launch configuration variables
@@ -72,7 +72,7 @@ def generate_launch_description():
         RewrittenYaml(
             source_file=params_file,
             root_key=namespace,
-            param_rewrites={},
+            param_rewrites={'use_sim_time': use_sim_time},
             convert_types=True,
         ),
         allow_substs=True,
@@ -114,7 +114,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        default_value=os.path.join(bringup_dir, 'params', 'navigation.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes',
     )
 
@@ -143,7 +143,7 @@ def generate_launch_description():
     # Specify the actions
     bringup_cmd_group = GroupAction(
         [
-            PushROSNamespace(condition=IfCondition(use_namespace), namespace=namespace),
+            PushRosNamespace(condition=IfCondition(use_namespace), namespace=namespace),
             Node(
                 condition=IfCondition(use_composition),
                 name='nav2_container',
@@ -172,7 +172,7 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource(
                     os.path.join(launch_dir, 'slam_launch.py')
                 ),
-                condition=IfCondition(PythonExpression([slam, ' and ', use_localization])),
+                condition=IfCondition(PythonExpression(["'", slam, "'.lower() == 'true' and '", use_localization, "'.lower() == 'true'"])),
                 launch_arguments={
                     'namespace': namespace,
                     'use_sim_time': use_sim_time,
@@ -185,7 +185,7 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource(
                     os.path.join(launch_dir, 'localization_launch.py')
                 ),
-                condition=IfCondition(PythonExpression(['not ', slam, ' and ', use_localization])),
+                condition=IfCondition(PythonExpression(["'", slam, "'.lower() != 'true' and '", use_localization, "'.lower() == 'true'"])),
                 launch_arguments={
                     'namespace': namespace,
                     'map': map_yaml_file,

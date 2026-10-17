@@ -83,7 +83,7 @@ public:
 		std::bind(&IAHRS::Euler_angle_reset_callback, this, std::placeholders::_1, std::placeholders::_2));
 
 		//PARAM
-		this->declare_parameter("m_bSingle_TF_option", rclcpp::PARAMETER_BOOL);
+		this->declare_parameter("m_bSingle_TF_option", true);
 		m_bSingle_TF_option_param = this->get_parameter("m_bSingle_TF_option");
 		//Get Param
 		m_bSingle_TF_option = m_bSingle_TF_option_param.as_bool();
@@ -100,9 +100,10 @@ public:
 	////function//////////////////////////////////////////////////////////////////////////////
 	int serial_open ()
 	{
-		printf ("Try to open serial: %s\n", SERIAL_PORT); 
+		const auto serial_port = this->declare_parameter<std::string>("serial_port", SERIAL_PORT);
+		printf ("Try to open serial: %s\n", serial_port.c_str());
 
-		serial_fd = open(SERIAL_PORT, O_RDWR|O_NOCTTY);
+		serial_fd = open(serial_port.c_str(), O_RDWR|O_NOCTTY);
 		if (serial_fd < 0) 
 		{
 			printf ("Error unable to open %s\n", SERIAL_PORT);

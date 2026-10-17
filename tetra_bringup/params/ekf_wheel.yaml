@@ -1,0 +1,28 @@
+# Wheel-only profile for robots without an enabled IAHRS IMU.
+### ekf config file ###
+ekf_filter_node:
+    ros__parameters:
+        qos_overrides:
+            /odometry/filtered:
+                publisher:
+                    reliability: best_effort
+        frequency: 50.0
+        two_d_mode: true #false
+        transform_time_offset: 0.0
+        transform_timeout: 0.1
+        publish_tf: true
+
+        map_frame: map              # Defaults to "map" if unspecified
+        odom_frame: odom            # Defaults to "odom" if unspecified
+        base_link_frame: base_footprint  # Defaults to "base_link" if unspecified
+        world_frame: odom           # Defaults to the value of odom_frame if unspecified
+
+        odom0: odom
+        odom0_config: [false,  false,  false,
+                       false, false, false,
+                       true, true, false, 
+                       false, false, true,
+                       false, false, false]
+        odom0_differential: false #false
+
+

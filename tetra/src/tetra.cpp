@@ -32,13 +32,12 @@ extern "C"
 #include <string.h>
 #include <math.h>
 #include <unistd.h>
-#include <bitset>
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
 
-#define WHEEL_RADIUS 0.1000 //m
-#define WHEEL_DISTANCE 0.4330 //m
+#define WHEEL_RADIUS 0.1018 // DS4-M calibrated drive radius, m
+#define WHEEL_DISTANCE 0.4380 // DS4-M drive wheel separation, m
 #define TREAD_WIDTH 0.04 //m
 
 using namespace std;
@@ -48,7 +47,7 @@ pthread_t p_odom_loop_thread;
 
 //serial
 int com_port = 0;
-char port[16] = {0,};
+char port[256] = {0,};
 //calc
 bool first;
 double prev_coordinates[3] = {0.0, };
@@ -64,9 +63,6 @@ int m_old_accel_data = 50;
 double m_dX_pos = 0.0;
 double m_dY_pos = 0.0;
 double m_dTheta = 0.0;
-//Velocity
-double m_dVelocity_l = 0.0;
-double m_dVelocity_r = 0.0;
 int Reset = 0;
 //bumper & emg
 int m_bumper_data = 0;
@@ -75,34 +71,6 @@ int m_emg_state = 0;
 int m_left_error_code = 0;
 int m_right_error_code = 0;
 
-constexpr int BUMPER_FRONT_MASK = 0x01;
-constexpr int SERVO_MASK = 0x02;
-constexpr int BUMPER_BACK_MASK = 0x08;
-
-bool IsServoEnabled(int data)
-{
-	return (data & SERVO_MASK) == 0;
-}
-
-bool IsFrontBumperActive(int data)
-{
-	return (data & BUMPER_FRONT_MASK) != 0;
-}
-
-bool IsBackBumperActive(int data)
-{
-	return (data & BUMPER_BACK_MASK) != 0;
-}
-
-void PrintBumperServoState(int data)
-{
-	std::bitset<4> bits(static_cast<unsigned long>(data));
-	printf("[bumper/servo] %s -> servo:%s front:%s back:%s\n",
-		bits.to_string().c_str(),
-		IsServoEnabled(data) ? "ON" : "OFF",
-		IsFrontBumperActive(data) ? "ON" : "OFF",
-		IsBackBumperActive(data) ? "ON" : "OFF");
-}
 //Position move
 int m_iPOS_Y = 0;
 int m_iPOS_Theta = 0;
@@ -217,7 +185,8 @@ public:
 		tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
 		//publish list/////////////////////////////////////////////////////////////////////////////////////
-		odom_publisher = this->create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::SensorDataQoS());
+		// Reliable odometry also serves Nav2 and Cartographer directly (no EKF).
+		odom_publisher = this->create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::QoS(10));
 		bumper_publisher = this->create_publisher<std_msgs::msg::Int32>("bumper_data", 10);
 		emg_publisher = this->create_publisher<std_msgs::msg::Int32>("emg_state", 1);
 		left_error_code_publisher = this->create_publisher<std_msgs::msg::Int32>("left_error_code", 1);
@@ -260,7 +229,7 @@ public:
 
 		
 		//PARAM
-		this->declare_parameter("m_bEKF_option", rclcpp::PARAMETER_BOOL);
+		this->declare_parameter("m_bEKF_option", false);
 		m_bEKF_option_param = this->get_parameter("m_bEKF_option");
 		//Get Param
 		m_bEKF_option = m_bEKF_option_param.as_bool();
@@ -316,36 +285,16 @@ public:
 		return WHEEL_RADIUS*2.0*M_PI*(d_rpm/60.0);
 	}
 
-	void SetMoveCommand(double fLinear_vel, double fAngular_vel)
+	int SetMoveCommand(double fLinear_vel, double fAngular_vel)
 	{
-	double Left_Wheel_vel = 0.0;
-	double Right_Wheel_vel = 0.0;
-	speed_to_diwheel_rpm(fLinear_vel, fAngular_vel, &Left_Wheel_vel, &Right_Wheel_vel);
-	//printf("Left_Wheel_vel: %f, Right_Wheel_vel: %f \n", Left_Wheel_vel, Right_Wheel_vel);
+		double left_rpm = 0.0, right_rpm = 0.0;
+		speed_to_diwheel_rpm(fLinear_vel, fAngular_vel, &left_rpm, &right_rpm);
+		const int left_mm_s = 1000.0 * RPM_to_ms(left_rpm);
+		const int right_mm_s = 1000.0 * RPM_to_ms(right_rpm);
+		// DS4-M uses ASCII BE; the DS5-M binary exchange is incompatible.
+		return dssp_rs232_drv_module_set_velocity(left_mm_s, right_mm_s);
+	}
 
-	int iData1 = 1000.0 * RPM_to_ms(Left_Wheel_vel);
-	int iData2 = 1000.0 * RPM_to_ms(Right_Wheel_vel);
-	//dssp_rs232_drv_module_set_velocity(iData1, iData2); //ASCII Command
-	int ret = dssp_rs232_drv_module_set_velocity2(iData1, iData2, &m_dX_pos, &m_dY_pos, &m_dTheta, &m_dVelocity_l, &m_dVelocity_r, &m_bumper_data, &m_emg_state); //binary Command
-	if(ret == -2) dssp_rs232_drv_module_read_bumper_emg(&m_bumper_data, &m_emg_state, &m_left_error_code, &m_right_error_code);
-	else return;
-	
-	//Error Code Check -> Reset & servo On Loop
-	if(m_left_error_code != 48 || m_right_error_code != 48)
-    {
-        // 왼쪽, 오른쪽 각각 에러 상태인지 확인 후 직관적인 로그 출력
-        if(m_left_error_code != 48) {
-            PrintMotorErrorLog("Left", m_left_error_code);
-        }
-        if(m_right_error_code != 48) {
-            PrintMotorErrorLog("Right", m_right_error_code);
-        }
-
-        usleep(1000);
-        dssp_rs232_drv_module_set_servo(0); // Servo Off
-    }
-}
-	
 	//Callback function////////////////////////////////////////////////////////////////////////////
 	void velCallback(const geometry_msgs::msg::Twist::SharedPtr vel)
 	{
@@ -456,6 +405,7 @@ public:
 		if(Reset == 1)
 		{
 			dssp_rs232_drv_module_reset_odometry();
+			first = true; // Do not differentiate across an odometry reset.
 			Reset = 0;
 		}
 	}
@@ -640,8 +590,13 @@ int main(int argc, char * argv[])
 		coordinates[i] = 0;
 	}
 
-	rclcpp::WallRate loop_rate(60); //default: 30HZ
-	sprintf(port, "/dev/ttyS2");
+	rclcpp::WallRate loop_rate(30); // DS4-M ASCII polling rate
+	const auto serial_port = node->declare_parameter<std::string>("serial_port", "/dev/tetra/motor");
+	if (serial_port.size() >= sizeof(port)) {
+		RCLCPP_ERROR(node->get_logger(), "serial_port is too long");
+		return 1;
+	}
+	snprintf(port, sizeof(port), "%s", serial_port.c_str());
 	//sprintf(port, "/dev/TETRA");
 	//RS232 Connect
 	if(dssp_rs232_drv_module_create(port, 200) == 0)
@@ -654,58 +609,21 @@ int main(int argc, char * argv[])
 		return -1;
 	}
 
-	// Error Reset//
-	dssp_rs232_drv_module_set_drive_err_reset();
-	usleep(10000);
-	//set acc slope time
-	dssp_rs232_drv_module_set_parameter(6, 50); //accelation slop time 50mecs
-	usleep(10000);
-	//Velocity Mode
-	dssp_rs232_drv_module_set_velocitymode();
-	usleep(10000);
-	//Servo On//
-	dssp_rs232_drv_module_set_servo(1);
-	usleep(10000);
-	//Reset odometry
-	dssp_rs232_drv_module_reset_odometry();
-	usleep(10000);
-	//emg flag//
-	bool m_bflag_emg = false;
-	bool m_bflag_bumper = false;
-
-	dssp_rs232_drv_module_read_bumper_emg(&m_bumper_data, &m_emg_state, &m_left_error_code, &m_right_error_code);
-	PrintBumperServoState(m_bumper_data);
-
-	//Error Code Check 
-	if(m_left_error_code != 48 || m_right_error_code != 48)
-	{
-		printf("[Motor Driver Error] Left Error Code: %d \n", m_left_error_code);
-		printf("[Motor Driver Error] Right Error Code: %d \n", m_right_error_code);
+	// Initialize the DS4-M controller with the servo disabled. Each ASCII
+	// command must be acknowledged before continuing to the next operation.
+	if (dssp_rs232_drv_module_set_servo(0) != 0 ||
+		dssp_rs232_drv_module_set_drive_err_reset() != 0 ||
+		dssp_rs232_drv_module_set_parameter(6, 50) != 0 ||
+		dssp_rs232_drv_module_set_velocitymode() != 0 ||
+		dssp_rs232_drv_module_reset_odometry() != 0) {
+		RCLCPP_ERROR(node->get_logger(), "DS4-M ASCII initialization failed");
+		dssp_rs232_drv_module_set_servo(0);
+		dssp_rs232_drv_module_destroy();
+		rclcpp::shutdown();
+		return 1;
 	}
-
-	// if(IsServoEnabled(m_bumper_data)) 
-	// {
-	// 	printf("!! SERVO ON !! \n");
-	// 	dssp_rs232_drv_module_set_servo(1); //Servo On
-	// 	m_bflag_bumper = false;
-	// }
-	// else
-	// {
-	// 	printf("!! SERVO OFF !! \n");
-	// 	dssp_rs232_drv_module_set_servo(0); //Servo Off
-	// 	m_bflag_bumper = true;
-	// }
-
-	if(m_emg_state)
-	{
-			dssp_rs232_drv_module_set_servo(0);
-			m_bflag_emg = false;
-	}
-	else
-	{
-			dssp_rs232_drv_module_set_servo(1); //Servo On
-			m_bflag_emg = true;
-	}
+	bool m_bflag_emg = true; // Enable only after receiving a healthy status.
+	int exit_status = 0;
 
 	printf("□■■■■■■■□■■■■■■□□■■■■■■■□■■■■■■□□□□□□■□□□□\n");
 	printf("□□□□■□□□□■□□□□□□□□□□■□□□□■□□□□□■□□□□□■□□□□\n");
@@ -772,110 +690,92 @@ int main(int argc, char * argv[])
 		//////////////////////////////////////////////////////////////////////////
 		control_angular = input_angular;
 
-		//EMG Check Loop
-		std_msgs::msg::Int32 emg_state;
-		emg_state.data = m_emg_state;
-		node->emg_publisher->publish(emg_state);
-
-		//Bumper Check Loop
-		std_msgs::msg::Int32 bumper_data;
-		bumper_data.data = m_bumper_data;
-		node->bumper_publisher->publish(bumper_data);
-		
-		//Error Code Check Loop
-		// std_msgs::msg::Int32 left_error_code;
-		// std_msgs::msg::Int32 right_error_code;
-		// left_error_code.data = m_left_error_code;
-		// right_error_code.data = m_right_error_code;
-		// node->left_error_code_publisher->publish(left_error_code);
-		// node->right_error_code_publisher->publish(right_error_code);
-
-		//odometry calback//
-		// dssp_rs232_drv_module_read_odometry(&m_dX_pos, &m_dY_pos, &m_dTheta);
-		// coordinates[0] = (m_dX_pos /1000.0);
-		// coordinates[1] = (m_dY_pos /1000.0);
-		// coordinates[2] = m_dTheta * (M_PI/1800.0);
-
-		coordinates[0] = (m_dX_pos /10000.0);
-		coordinates[1] = (m_dY_pos /10000.0);
-		coordinates[2] = m_dTheta * (M_PI/1800.0);
-
-		if(!bPosition_mode_flag) //Velocity mode only
-		{
-			node->SetMoveCommand(control_linear, control_angular);
-			//printf("[cmd_vel]: control_linear = %.3f, control_angular = %.3f \n", control_linear, control_angular);
-			//dssp_rs232_drv_module_read_bumper_emg(&m_bumper_data, &m_emg_state, &m_left_error_code, &m_right_error_code);
+		// DS4-M reports ASCII AC1 odometry in mm and tenths of a degree.
+		// AA carries emergency-stop / bumper state and ASCII motor error codes.
+		if (dssp_rs232_drv_module_read_odometry(&m_dX_pos, &m_dY_pos, &m_dTheta) != 0 ||
+			dssp_rs232_drv_module_read_bumper_emg(&m_bumper_data, &m_emg_state,
+				&m_left_error_code, &m_right_error_code) != 0) {
+			RCLCPP_ERROR(node->get_logger(), "DS4-M ASCII polling failed; stopping driver");
+			exit_status = 1;
+			break;
 		}
+		coordinates[0] = m_dX_pos / 1000.0;
+		coordinates[1] = m_dY_pos / 1000.0;
+		coordinates[2] = m_dTheta * (M_PI / 1800.0);
 
-		//Error Code Check -> Reset & servo On Loop
-		// if(m_left_error_code != 48 || m_right_error_code != 48)
-		// {
-		// 	printf("[Motor Driver Error] Left Error Code: %d \n", m_left_error_code);
-		// 	printf("[Motor Driver Error] Right Error Code: %d \n", m_right_error_code);
-		// 	dssp_rs232_drv_module_set_drive_err_reset();
-		// 	usleep(1000);
-		// 	dssp_rs232_drv_module_set_servo(1); //Servo On
-		// }
+		std_msgs::msg::Int32 status;
+		status.data = m_emg_state;
+		node->emg_publisher->publish(status);
+		status.data = m_bumper_data;
+		node->bumper_publisher->publish(status);
+		status.data = m_left_error_code;
+		node->left_error_code_publisher->publish(status);
+		status.data = m_right_error_code;
+		node->right_error_code_publisher->publish(status);
 
-		if(IsServoEnabled(m_bumper_data)) 
-		{
-			if(m_bflag_bumper)
-			{
-				printf("!! SERVO ON !! \n");
-				dssp_rs232_drv_module_set_servo(1); //Servo On
-				m_bflag_bumper = false;
+		// Code '1' may accompany an asserted emergency stop. Other faults
+		// stop this process; do not repeatedly reset a faulty motor controller.
+		const auto motor_fault = [](int code) {
+			return code != '0' && !(m_emg_state && code == '1');
+		};
+		if (motor_fault(m_left_error_code) || motor_fault(m_right_error_code)) {
+			PrintMotorErrorLog("Left", m_left_error_code);
+			PrintMotorErrorLog("Right", m_right_error_code);
+			exit_status = 1;
+			break;
+		}
+		if (m_emg_state) {
+			if (!m_bflag_emg && dssp_rs232_drv_module_set_servo(0) != 0) {
+				exit_status = 1;
+				break;
 			}
-		}
-		else
-		{
-			if(!m_bflag_bumper)
-			{
-				printf("!! SERVO OFF !! \n");
-				dssp_rs232_drv_module_set_servo(0); //Servo Off
-				usleep(1000);
-				dssp_rs232_drv_module_set_drive_err_reset();
-				usleep(1000);
-				m_bflag_bumper = true;
+			m_bflag_emg = true;
+			linear = angular = control_linear = control_angular = 0.0;
+		} else if (m_bflag_emg) {
+			// Discard commands retained from before the emergency stop.
+			linear = angular = control_linear = control_angular = 0.0;
+			if (dssp_rs232_drv_module_set_velocity(0, 0) != 0 ||
+				dssp_rs232_drv_module_set_servo(1) != 0) {
+				exit_status = 1;
+				break;
 			}
+			m_bflag_emg = false;
 		}
 
-		// if(m_emg_state)
-		// {
-		// 	if(m_bflag_emg)
-		// 	{
-		// 		dssp_rs232_drv_module_set_servo(0); //Servo Off
-		// 		usleep(1000);
-		// 		dssp_rs232_drv_module_set_drive_err_reset();
-		// 		usleep(1000);
-		// 		m_bflag_emg = false;
-		// 	}
-		// }
-		// else
-		// {
-		// 	if(!m_bflag_emg)
-		// 	{
-		// 		dssp_rs232_drv_module_set_servo(1); //Servo On
-		// 		m_bflag_emg = true;
-		// 	}
-		// }
+		if (!bPosition_mode_flag &&
+			node->SetMoveCommand(control_linear, control_angular) != 0) {
+			RCLCPP_ERROR(node->get_logger(), "DS4-M velocity command failed; stopping driver");
+			exit_status = 1;
+			break;
+		}
 
 		//node->read();
 		if(first) 
 		{
 			node->current_time = node->now();
 			node->last_time = node->current_time;
+			for (int i = 0; i < 3; ++i) prev_coordinates[i] = coordinates[i];
 			first=false;
 		}
 		else 
 		{
 			node->current_time = node->now();
 
-			dt=(node->current_time - node->last_time).seconds(); //dt=(current_time-last_time).toSec();
-			for(int i=0;i<3;i++)
-			{
-				velocity[i]=(coordinates[i]-prev_coordinates[i])/dt;
-				prev_coordinates[i]=coordinates[i];
+			dt = (node->current_time - node->last_time).seconds();
+			if (dt <= 0.0) {
+				first = true;
+				loop_rate.sleep();
+				continue;
 			}
+			const double vx_odom = (coordinates[0] - prev_coordinates[0]) / dt;
+			const double vy_odom = (coordinates[1] - prev_coordinates[1]) / dt;
+			const double yaw_delta = coordinates[2] - prev_coordinates[2];
+			// Odometry twist is expressed in child_frame_id (base_footprint),
+			// not the world frame. Wrap yaw before differentiating across +/-pi.
+			velocity[0] = cos(coordinates[2]) * vx_odom + sin(coordinates[2]) * vy_odom;
+			velocity[1] = -sin(coordinates[2]) * vx_odom + cos(coordinates[2]) * vy_odom;
+			velocity[2] = atan2(sin(yaw_delta), cos(yaw_delta)) / dt;
+			for (int i = 0; i < 3; ++i) prev_coordinates[i] = coordinates[i];
 
 			geometry_msgs::msg::TransformStamped odom_trans;
 			tf2::Quaternion q;
@@ -910,10 +810,10 @@ int main(int argc, char * argv[])
 			odom.pose.pose.orientation.y = q.y();
 			odom.pose.pose.orientation.z = q.z();
 			odom.pose.pose.orientation.w = q.w();
-			odom.twist.twist.linear.x = m_dVelocity_l/1000.0;
-			odom.twist.twist.linear.y = 0.0;
+			odom.twist.twist.linear.x = velocity[0];
+			odom.twist.twist.linear.y = velocity[1];
 			odom.twist.twist.linear.z = 0.0;
-			odom.twist.twist.angular.z = m_dVelocity_r/1000.0;
+			odom.twist.twist.angular.z = velocity[2];
 			node->odom_publisher->publish(odom);
 
 			node->last_time = node->current_time;
@@ -923,7 +823,8 @@ int main(int argc, char * argv[])
     }
 
 	
-	//Servo Off
+	// Stop and disable the servo before closing the serial connection.
+	dssp_rs232_drv_module_set_velocity(0, 0);
 	dssp_rs232_drv_module_set_servo(0);
 	printf("Servo Off ! \n");
 	usleep(10000);
@@ -932,5 +833,5 @@ int main(int argc, char * argv[])
 	printf("RS232 Disconnect ! \n");
 
 	rclcpp::shutdown();
-    return 0;
+    return exit_status;
 }

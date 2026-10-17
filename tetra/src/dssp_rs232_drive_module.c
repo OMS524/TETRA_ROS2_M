@@ -15,7 +15,7 @@ int dssp_rs232_drv_module_create(const char *device, int time_out)
 
 	_drv = drvm_init(device, time_out);
 	
-	if(_drv == 0) return -1;
+	if(_drv <= 0) { _drv = 0; return -1; }
 	else return 0;
 }
 

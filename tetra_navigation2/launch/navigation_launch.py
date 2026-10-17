@@ -18,7 +18,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes, SetParameter
 from launch_ros.actions import Node
@@ -49,7 +49,6 @@ def generate_launch_description():
         'collision_monitor',
         'bt_navigator',
         'waypoint_follower',
-        'docking_server',
     ]
 
     # Map fully qualified names to relative ones so the node's namespace can be prepended.
@@ -61,7 +60,14 @@ def generate_launch_description():
     remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
 
     # Create our own temporary YAML files that include substitutions
-    param_substitutions = {'autostart': autostart}
+    param_substitutions = {
+        'autostart': autostart,
+        'use_sim_time': use_sim_time,
+        'default_nav_to_pose_bt_xml': os.path.join(
+            bringup_dir, 'behavior_trees', 'navigate_to_pose_w_replanning_and_recovery.xml'),
+        'default_nav_through_poses_bt_xml': os.path.join(
+            bringup_dir, 'behavior_trees', 'navigate_through_poses_w_replanning_and_recovery.xml'),
+    }
 
     configured_params = ParameterFile(
         RewrittenYaml(
@@ -89,7 +95,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        default_value=os.path.join(bringup_dir, 'params', 'navigation.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes',
     )
 
@@ -122,7 +128,7 @@ def generate_launch_description():
     )
 
     load_nodes = GroupAction(
-        condition=IfCondition(PythonExpression(['not ', use_composition])),
+        condition=UnlessCondition(use_composition),
         actions=[
             SetParameter('use_sim_time', use_sim_time),
             Node(
@@ -132,8 +138,8 @@ def generate_launch_description():
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', 'error'],
-                remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings + [('cmd_vel', 'cmd_vel_raw')],
             ),
             Node(
                 package='nav2_smoother',
@@ -166,7 +172,7 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
+                remappings=remappings + [('cmd_vel', 'cmd_vel_raw')],
             ),
             Node(
                 package='nav2_bt_navigator',
@@ -200,23 +206,12 @@ def generate_launch_description():
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings
-                + [('cmd_vel', 'cmd_vel_nav')],
+                + [('cmd_vel', 'cmd_vel_raw')],
             ),
             Node(
                 package='nav2_collision_monitor',
                 executable='collision_monitor',
                 name='collision_monitor',
-                output='screen',
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings,
-            ),
-            Node(
-                package='opennav_docking',
-                executable='opennav_docking',
-                name='docking_server',
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
@@ -247,7 +242,7 @@ def generate_launch_description():
                         plugin='nav2_controller::ControllerServer',
                         name='controller_server',
                         parameters=[configured_params],
-                        remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
+                        remappings=remappings + [('cmd_vel', 'cmd_vel_raw')],
                     ),
                     ComposableNode(
                         package='nav2_smoother',
@@ -268,7 +263,7 @@ def generate_launch_description():
                         plugin='behavior_server::BehaviorServer',
                         name='behavior_server',
                         parameters=[configured_params],
-                        remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
+                        remappings=remappings + [('cmd_vel', 'cmd_vel_raw')],
                     ),
                     ComposableNode(
                         package='nav2_bt_navigator',
@@ -290,19 +285,12 @@ def generate_launch_description():
                         name='velocity_smoother',
                         parameters=[configured_params],
                         remappings=remappings
-                        + [('cmd_vel', 'cmd_vel_nav')],
+                        + [('cmd_vel', 'cmd_vel_raw')],
                     ),
                     ComposableNode(
                         package='nav2_collision_monitor',
                         plugin='nav2_collision_monitor::CollisionMonitor',
                         name='collision_monitor',
-                        parameters=[configured_params],
-                        remappings=remappings,
-                    ),
-                    ComposableNode(
-                        package='opennav_docking',
-                        plugin='opennav_docking::DockingServer',
-                        name='docking_server',
                         parameters=[configured_params],
                         remappings=remappings,
                     ),

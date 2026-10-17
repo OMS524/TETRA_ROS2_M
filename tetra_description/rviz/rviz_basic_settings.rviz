@@ -52,7 +52,7 @@ Visualization Manager:
       Description Source: Topic
       Description Topic:
         Depth: 5
-        Durability Policy: Volatile
+        Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /robot_description
@@ -68,7 +68,7 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        footprint_link:
+        base_footprint:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -84,7 +84,7 @@ Visualization Manager:
         All Enabled: false
         base_link:
           Value: false
-        footprint_link:
+        base_footprint:
           Value: true
       Marker Scale: 1
       Name: TF
@@ -92,7 +92,7 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        footprint_link:
+        base_footprint:
           base_link:
             {}
       Update Interval: 0

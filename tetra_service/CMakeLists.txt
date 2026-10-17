@@ -6,9 +6,9 @@ if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
 
-# Default to C++14
+# Configurable user data directories use std::filesystem.
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -34,7 +34,7 @@ find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(interfaces REQUIRED) #interfaces package
 find_package(robot_localization REQUIRED)
-find_package(pcl_ros REQUIRED)
+find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED)
 find_package(apriltag_ros REQUIRED)
 find_package(apriltag_msgs REQUIRED)
@@ -56,7 +56,7 @@ include_directories(
 		${nav_msgs_INCLUDE_DIRS}
 		${geometry_msgs_INCLUDE_DIRS}
     		${robot_localization_INCLUDE_DIRS}
-    		${pcl_ros_INCLUDE_DIRS}
+    ${pcl_conversions_INCLUDE_DIRS}
     		${PCL_INCLUDE_DIRS}
     		${apriltag_ros_INCLUDE_DIRS}
     		${apriltag_msgs_INCLUDE_DIRS}
@@ -73,6 +73,7 @@ set(dependencies
   tf2
   tf2_ros
   tf2_geometry_msgs
+  pcl_conversions
   geometry_msgs
   nav2_costmap_2d
   nav2_core
@@ -104,7 +105,7 @@ target_link_libraries(${PROJECT_NAME}
                       ${nav_msgs_LIBRARIES}
                       ${geometry_msgs_LIBRARIES}
                       ${robot_localization_LIBRARIES}
-                      ${pcl_ros_LIBRARIES}
+                      ${pcl_conversions_LIBRARIES}
                       ${PCL_LIBRARIES}
                       ${apriltag_ros_LIBRARIES}
                       ${apriltag_msgs_LIBRARIES}

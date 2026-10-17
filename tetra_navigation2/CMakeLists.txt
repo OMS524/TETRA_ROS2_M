@@ -8,13 +8,12 @@ project(tetra_navigation2)
 # Find ament packages and libraries for ament and system dependencies
 ################################################################################
 find_package(ament_cmake REQUIRED)
-find_package(spatio_temporal_voxel_layer REQUIRED)
 
 ################################################################################
 # Install
 ################################################################################
 install(
-  DIRECTORY launch maps params rviz
+  DIRECTORY launch maps params rviz behavior_trees
   DESTINATION share/${PROJECT_NAME}
 )
 

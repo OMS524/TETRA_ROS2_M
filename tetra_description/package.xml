@@ -3,9 +3,11 @@
 <package format="3">
   <name>tetra_description</name>
   <version>0.0.1</version>
-  <description>tetra_description ROS2 package</description>
+  <description>TETRA DS4-M real-robot description for ROS 2 Humble</description>
   <maintainer email="wbjin@hyulimrobot.com">Wookbin Jin</maintainer>
   <license>Apache License 2.0</license>
+  <!-- DS4 mesh / URDF source: meshes/ds4_m/source_manifest.xml -->
+  <license>BSD</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
@@ -17,6 +19,7 @@
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
+  <exec_depend>launch_ros</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

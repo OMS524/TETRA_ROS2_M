@@ -136,6 +136,8 @@ int get_response(int fd, unsigned char data[])
 	
 	do
 	{
+		// All ASCII callers provide at least 255 bytes. Reject malformed frames.
+		if (index >= 255) return -1;
 		ret = read(fd, &data[index], 1);
 		index++;
 		if(ret <= 0) return -1;

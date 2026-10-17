@@ -337,10 +337,10 @@ int drvm_read_encoder(int fd, int *left, int *right)
 	if(ret != 0 ) return ret;
 
 	memcpy(tmp, &packet_buf[2], 10);
-	tmp[11] = '\0';
+	tmp[10] = '\0';
 	*left = atoi(tmp);
 	memcpy(tmp, &packet_buf[12], 10);
-	tmp[11] = '\0';
+	tmp[10] = '\0';
 	*right = atoi(tmp);
 
 	return ret;
@@ -364,15 +364,15 @@ int drvm_read_odometry(int fd, double *Xpos_mm, double *Ypos_mm, double *deg)
 	if(ret != 0 ) return ret;
 
 	memcpy(tmp, &packet_buf[2], 10);
-	tmp[11] = '\0';
+	tmp[10] = '\0';
 	*Xpos_mm = atof(tmp);
 
 	memcpy(tmp, &packet_buf[12], 10);
-	tmp[11] = '\0';
+	tmp[10] = '\0';
 	*Ypos_mm = atof(tmp);
 
 	memcpy(tmp, &packet_buf[22], 10);
-	tmp[11] = '\0';
+	tmp[10] = '\0';
 	*deg = atof(tmp);
 
 	// for(int i=0; i<35; i++)

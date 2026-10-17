@@ -50,7 +50,7 @@ Visualization Manager:
       Description Source: Topic
       Description Topic:
         Depth: 5
-        Durability Policy: Volatile
+        Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /robot_description
@@ -62,6 +62,11 @@ Visualization Manager:
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
         base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        base_Upperlink:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -111,12 +116,22 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        rear_caster_rotate:
+        l_rear_caster_rotate:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        rear_caster_wheel:
+        r_rear_caster_rotate:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        l_rear_caster_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        r_rear_caster_wheel:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -138,6 +153,8 @@ Visualization Manager:
         All Enabled: false
         base_footprint:
           Value: true
+        base_Upperlink:
+          Value: false
         base_l_wheel_link:
           Value: false
         base_link:
@@ -168,9 +185,13 @@ Visualization Manager:
           Value: true
         odom:
           Value: true
-        rear_caster_rotate:
+        l_rear_caster_rotate:
           Value: false
-        rear_caster_wheel:
+        r_rear_caster_rotate:
+          Value: false
+        l_rear_caster_wheel:
+          Value: false
+        r_rear_caster_wheel:
           Value: false
       Marker Scale: 1
       Name: TF
@@ -182,6 +203,8 @@ Visualization Manager:
           odom:
             base_footprint:
               base_link:
+                base_Upperlink:
+                  {}
                 base_l_wheel_link:
                   {}
                 base_r_wheel_link:
@@ -203,8 +226,11 @@ Visualization Manager:
                   {}
                 laser_link2:
                   {}
-                rear_caster_rotate:
-                  rear_caster_wheel:
+                l_rear_caster_rotate:
+                  l_rear_caster_wheel:
+                    {}
+                r_rear_caster_rotate:
+                  r_rear_caster_wheel:
                     {}
       Update Interval: 0
       Value: true

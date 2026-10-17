@@ -55,7 +55,9 @@ extern "C"
 #include <math.h>
 #include <unistd.h>
 #include <atomic>
+#include <filesystem>
 using namespace std;
+std::string log_directory;
 
 #define Ultrasonic_MIN_range	0.04
 #define Ultrasonic_MAX_range	0.5
@@ -99,7 +101,7 @@ int m_iParam31 = 0;
 //serial
 int m_iFlag_PowerCheck_cnt = 0;
 int com_port = 0;
-char port[16] = {0,};
+char port[256] = {0,};
 //battery data
 int m_ibattery_Level = 0;
 double m_dbattery = 0.0;
@@ -149,10 +151,12 @@ void Error_Log_write(string log_data)
 	string m_time_stemp = to_string(t->tm_hour) + m_colon + to_string(t->tm_min) + m_colon + to_string(t->tm_sec);
 	string m_temp1 = m_time_stemp + "_error";		
 
-	m_strFilePathName = "/home/tetra/LOG/" + m_temp1 + ".txt";  
+	m_strFilePathName = log_directory + "/" + m_temp1 + ".txt";
 	fp = fopen(m_strFilePathName.c_str(), "w");
-	if(fp == NULL) 
-		printf("file is null \n");
+	if(fp == NULL) {
+		perror("Cannot write TETRA error log");
+		return;
+	}
 
 
 	fprintf(fp, "[Error]: %s \n", log_data.c_str());
@@ -283,12 +287,12 @@ public:
 
 		//Get ROS PARAM//
 		//Conveyor_option_param
-		this->declare_parameter("m_bConveyor_option", rclcpp::PARAMETER_BOOL);
+		this->declare_parameter("m_bConveyor_option", false);
 		m_bConveyor_option_param = this->get_parameter("m_bConveyor_option");
 		m_bConveyor_option = m_bConveyor_option_param.as_bool();
 	
 		// //Ultrasonic_option_param
-		this->declare_parameter("m_bUltrasonic_option", rclcpp::PARAMETER_BOOL);
+		this->declare_parameter("m_bUltrasonic_option", false);
 		m_bUltrasonic_option_param = this->get_parameter("m_bUltrasonic_option");
 		m_bUltrasonic_option = m_bUltrasonic_option_param.as_bool();
 
@@ -511,12 +515,15 @@ private:
 		
 		if(request->value_index == 1)
 		{
-			m_strFilePathName = "/home/tetra/LOG/" + m_temp1 + ".txt";  
+			m_strFilePathName = log_directory + "/" + m_temp1 + ".txt";
 			dssp_rs232_power_module_read_Voltage(m_iVlotage_data); 
 
 			fp = fopen(m_strFilePathName.c_str(), "w");
-			if(fp == NULL) 
-				printf("file is null \n");
+			if(fp == NULL) {
+				perror("Cannot write TETRA power log");
+				response->command_result = false;
+				return false;
+			}
 
 			for(int i=0; i<500; i++)
 			{
@@ -526,12 +533,15 @@ private:
 		}
 		else if(request->value_index == 2)
 		{
-			m_strFilePathName = "/home/tetra/LOG/" + m_temp2 + ".txt";  
+			m_strFilePathName = log_directory + "/" + m_temp2 + ".txt";
 			dssp_rs232_power_module_read_Current(m_iCurrent_data);
 
 			fp = fopen(m_strFilePathName.c_str(), "w");
-			if(fp == NULL) 
-				printf("file is null \n");
+			if(fp == NULL) {
+				perror("Cannot write TETRA power log");
+				response->command_result = false;
+				return false;
+			}
 
 			for(int j=0; j<500; j++)
 			{
@@ -931,9 +941,22 @@ int main(int argc, char * argv[])
 	// Create a function for when messages are to be sent.
 	setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 	auto node = std::make_shared<TETRA_INTERFACE>();
+    const char *user_home = std::getenv("HOME");
+    log_directory = node->declare_parameter<std::string>(
+        "log_directory", std::string(user_home ? user_home : ".") + "/.ros/tetra/log");
+    std::error_code log_error;
+    std::filesystem::create_directories(log_directory, log_error);
+    if (log_error) {
+        RCLCPP_WARN(node->get_logger(), "Cannot create log directory: %s", log_error.message().c_str());
+    }
 
 	rclcpp::WallRate loop_rate(30); //default: 30HZ
-	sprintf(port, "/dev/ttyS3");
+	const auto serial_port = node->declare_parameter<std::string>("serial_port", "/dev/tetra/interface");
+	if (serial_port.size() >= sizeof(port)) {
+		RCLCPP_ERROR(node->get_logger(), "serial_port is too long");
+		return 1;
+	}
+	snprintf(port, sizeof(port), "%s", serial_port.c_str());
 	//sprintf(port, "/dev/TETRA");
 
 	//RS232 Connect

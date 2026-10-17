@@ -3,6 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
 from launch.actions import IncludeLaunchDescription
@@ -49,7 +50,6 @@ def generate_launch_description():
                        '-configuration_basename', configuration_basename],
 	      remappings=[
 		('echoes', 'scan'),
-		('/odom', '/odometry/filtered')
 	      ]
 	    ),
 
@@ -70,19 +70,14 @@ def generate_launch_description():
         ),
 
             
+        DeclareLaunchArgument('use_rviz', default_value='true'),
         Node(
+            condition=IfCondition(LaunchConfiguration('use_rviz')),
             package='rviz2',
             executable='rviz2',
             name='rviz2',
             arguments=['-d', rviz_config_dir],
             parameters=[{'use_sim_time': use_sim_time}],
             output='screen'),
-            
-      Node(
-    	package='tf2_ros',
-    	executable='static_transform_publisher',
-   	name='link1_broadcaster',
-    	arguments=['0', '0', '0', '0', '0', '0', '1', 'map', 'odom'],
-    	output='screen'),
             
     ])

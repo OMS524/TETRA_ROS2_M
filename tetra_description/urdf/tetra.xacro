@@ -2,6 +2,14 @@
 
 <robot name="tetra" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <!-- Mount defaults match the directly received DS4-M tetra_description.xacro. -->
+  <xacro:arg name="lidar_x" default="0.1372"/>
+  <xacro:arg name="lidar_y" default="0.0"/>
+  <xacro:arg name="lidar_z" default="0.142"/>
+  <xacro:arg name="lidar_roll" default="3.14"/>
+  <xacro:arg name="lidar_pitch" default="3.14"/>
+  <xacro:arg name="lidar_yaw" default="0.0"/>
+
   <!-- Define a number of dimensions using properties -->
   <xacro:property name="base_length" value="0.473" />
   <xacro:property name="base_radius" value="0.2365" />
@@ -18,11 +26,11 @@
 
    <!-- Include all component files -->
    <xacro:include filename="$(find tetra_description)/urdf/materials.urdf.xacro" />
-   <xacro:include filename="$(find tetra_description)/urdf/base.urdf.xacro" /> 
-   
+   <xacro:include filename="$(find tetra_description)/urdf/base.urdf.xacro" />
+
    <!-- Add the base and wheels -->
-   <base name="base" color="black"/>
- 
+   <xacro:base name="base" color="Black"/>
+
 
   <link name="laser">
       <visual>
@@ -30,12 +38,13 @@
         <geometry>
           <box size="0.01 0.01 0.01" />
         </geometry>
-        <material name="grey" />
+        <material name="Grey" />
       </visual>
   </link>
 
   <joint name="base_link_to_laser_link" type="fixed">
-    <origin xyz="0.1372 0 0.142" rpy="0 0 0" />
+    <origin xyz="$(arg lidar_x) $(arg lidar_y) $(arg lidar_z)"
+            rpy="$(arg lidar_roll) $(arg lidar_pitch) $(arg lidar_yaw)" />
     <parent link="base_link"/>
     <child link="laser" />
   </joint>
@@ -46,12 +55,12 @@
         <geometry>
           <box size="0.01 0.01 0.01" />
         </geometry>
-        <material name="grey" />
+        <material name="Grey" />
       </visual>
   </link>
 
   <joint name="base_link_to_laser_link2" type="fixed">
-    <origin xyz="-0.3955 0.0 0.211" rpy="0 0 ${PI}" />
+    <origin xyz="-0.390 0.0 0.211" rpy="0 0 ${PI}" />
     <parent link="base_link"/>
     <child link="laser_link2" />
   </joint>
@@ -62,7 +71,7 @@
         <geometry>
           <box size="0.01 0.01 0.01" />
         </geometry>
-        <material name="grey" />
+        <material name="Grey" />
       </visual>
   </link>
 
@@ -78,15 +87,15 @@
         <geometry>
           <box size="0.01 0.01 0.01" />
         </geometry>
-        <material name="grey" />
+        <material name="Grey" />
       </visual>
   </link>
 
   <joint name="camera" type="fixed">
-    <origin xyz="-0.38775 0.0 0.1807" rpy="1.5708 3.14159 4.71239"/>
+    <origin xyz="-0.384 0.0 0.1817" rpy="1.5708 3.14159 4.71239"/>
     <parent link="base_link"/>
     <child link="camera" />
-  </joint>  
+  </joint>
 
 
  <link name="front_bumper">
@@ -95,7 +104,7 @@
         <geometry>
           <box size="0.01 0.48 0.01" />
         </geometry>
-        <material name="transparentblack" />
+        <material name="TransparentBlack" />
       </visual>
   </link>
 
@@ -112,14 +121,38 @@
         <geometry>
           <box size="0.01 0.01 0.01" />
         </geometry>
-        <material name="grey" />
+        <material name="Grey" />
       </visual>
   </link>
 
   <joint name="camera1_link" type="fixed">
-    <origin xyz="0.1749 0.0 0.0" rpy="0 0 0" />
+    <origin xyz="0.1553 0.0 0.0" rpy="0 0 0" />
     <parent link="base_link"/>
     <child link="camera1_link" />
+  </joint>
+
+
+ <link name="base_Upperlink">
+   <visual>
+    <origin xyz=" 0 0 0 " rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://tetra_description/meshes/ds4_m/platform_body_upper.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="TransparentRed"/>
+    </visual>
+      <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <cylinder length="${base_length}" radius="${base_radius}"/>
+            </geometry>
+      </collision>
+  </link>
+
+  <joint name="base_Upperlink" type="fixed">
+    <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+    <parent link="base_link"/>
+    <child link="base_Upperlink" />
   </joint>
 
 

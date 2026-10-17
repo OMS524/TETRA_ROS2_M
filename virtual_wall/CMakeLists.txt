@@ -22,7 +22,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
-find_package(pcl_ros REQUIRED)
+find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
@@ -43,7 +43,7 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/src
   ${rclcpp_INCLUDE_DIRS}
   ${geometry_msgs_INCLUDE_DIRS}
-  ${pcl_ros_INCLUDE_DIRS}
+  ${pcl_conversions_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   ${nav_msgs_INCLUDE_DIRS}
 )
@@ -61,6 +61,7 @@ set(dependencies
   tf2
   tf2_ros
   tf2_geometry_msgs
+  pcl_conversions
   geometry_msgs
   nav_msgs
 )

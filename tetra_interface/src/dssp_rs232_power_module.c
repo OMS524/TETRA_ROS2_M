@@ -16,7 +16,7 @@ int dssp_rs232_power_module_create(const char *device, int time_out)
 
 	_power = power_init(device, time_out);
 	
-	if(_power == 0) return -1;
+	if(_power <= 0) { _power = 0; return -1; }
 	else return 0;
 }
 

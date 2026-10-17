@@ -1,54 +1,21 @@
-# tetra_description
+# TETRA DS4-M description
 
-## 설명
-`tetra_description` 패키지는 Tetra 로봇의 URDF(Unified Robot Description Format) 파일과 관련 리소스를 제공합니다. 이 패키지는 로봇의 물리적 구조와 시각화를 정의하며, 시뮬레이션 및 실제 로봇의 상태를 퍼블리시하는 데 사용됩니다.
+기본 모델은 AIRO-lab/tetra_pkg의 실물 DS4 모델입니다. 하부·상부 본체, 구동 바퀴 2개,
+후방 캐스터 2개를 포함하며 `meshes/ds4_m/`의 STL만 로드합니다.
+[원본 출처와 파일 대응](meshes/ds4_m/README.md)을 참고하세요.
 
-## 의존성
-- ament_cmake
-- xacro
-- robot_state_publisher
-- joint_state_publisher
-- joint_state_publisher_gui
+```bash
+ros2 launch tetra_description tetra_description.launch.py
+```
 
-## 설치 방법
-1. ROS2 워크스페이스를 설정합니다.
-2. `tetra_description` 디렉토리를 `src` 폴더에 복사합니다.
-3. 워크스페이스 루트에서 다음 명령어를 실행합니다:
-   ```bash
-   colcon build --packages-select tetra_description
-   ```
+`lidar_x/y/z`와 `lidar_roll/pitch/yaw`로 A2M12 장착 위치를 지정합니다.
+단위는 m / rad이며 `base_link` 기준입니다. 기본 위치 `(0.1372, 0, 0.142)`와
+회전 `(3.14, 3.14, 0)`은 직접 받은 선배 파일의 `laser_joint`와 같습니다.
+A2M12의 실제 브래킷을 새로 측정한 값은 아닙니다.
 
-## 주요 파일 설명
-### launch/
-- **`tetra_description.launch.py`**: 로봇의 URDF를 로드하고 `robot_state_publisher`를 실행하는 launch 파일입니다.
+`urdf/tetra.xacro`가 기본 진입점이고 `base.urdf.xacro`가 DS4 본체·바퀴를 정의합니다.
+기존 카메라 노드와의 호환을 위해 `camera` 프레임 이름은 유지했습니다.
+`base_footprint`의 시각화 직사각형은 Nav2의 DS4 영역(x -0.490~0.240, y ±0.260 m)과 같습니다.
 
-### urdf/
-- **`tetra.xacro`**: Tetra 로봇의 주요 URDF 파일로, 로봇의 구조와 링크를 정의합니다.
-- **`base.urdf.xacro`**: 로봇의 기본 링크와 휠을 정의하는 파일입니다.
-- **`materials.urdf.xacro`**: 로봇의 색상 및 재질을 정의하는 파일입니다.
-
-### meshes/
-- STL 파일들로, 로봇의 3D 모델을 정의합니다:
-  - `caster_wheel.stl`
-  - `caster_yoke.stl`
-  - `platform_body.stl`
-  - `wheel_drive_left.stl`
-  - `wheel_drive_right.stl`
-
-### rviz/
-- **`rviz_basic_settings.rviz`**: RViz 설정 파일로, 로봇의 시각화를 위한 기본 설정을 포함합니다.
-
-## 주요 노드
-- **`robot_state_publisher`**: URDF를 로드하고 TF 트리를 퍼블리시합니다.
-- **`joint_state_publisher`**: 로봇의 조인트 상태를 퍼블리시합니다.
-- **`joint_state_publisher_gui`**: GUI를 통해 조인트 상태를 조작할 수 있습니다.
-
-## 사용 방법
-1. Launch 파일 실행:
-   ```bash
-   ros2 launch tetra_description tetra_description.launch.py
-   ```
-2. RViz에서 로봇 모델을 시각화하려면 `rviz/rviz_basic_settings.rviz` 파일을 로드합니다.
-
-## 참고
-URDF 및 Xacro 파일에 대한 자세한 정보는 [ROS2 공식 문서](https://docs.ros.org/en/foxy/Tutorials/URDF.html)를 참조하세요.
+상위 `meshes/`에 남은 DS5-M 파일과 `urdf/tetra_bak.xacro`는 기본 실행에서 사용하지 않습니다.
+설치·빌드·주행 명령과 검증 방법은 [루트 README](../README.md)를 참고하세요.

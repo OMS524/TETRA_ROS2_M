@@ -19,7 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction
 from launch.actions import SetEnvironmentVariable
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import EqualsSubstitution
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.substitutions import NotEqualsSubstitution
@@ -31,7 +31,7 @@ from nav2_common.launch import RewrittenYaml
 
 def generate_launch_description():
     # Get the launch directory
-    bringup_dir = get_package_share_directory('tetra_bringup')
+    bringup_dir = get_package_share_directory('tetra_navigation2')
 
     namespace = LaunchConfiguration('namespace')
     map_yaml_file = LaunchConfiguration('map')
@@ -58,7 +58,7 @@ def generate_launch_description():
         RewrittenYaml(
             source_file=params_file,
             root_key=namespace,
-            param_rewrites={},
+            param_rewrites={'use_sim_time': use_sim_time, 'yaml_filename': map_yaml_file},
             convert_types=True,
         ),
         allow_substs=True,
@@ -86,7 +86,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        default_value=os.path.join(bringup_dir, 'params', 'amcl_localization.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes',
     )
 
@@ -119,7 +119,7 @@ def generate_launch_description():
     )
 
     load_nodes = GroupAction(
-        condition=IfCondition(PythonExpression(['not ', use_composition])),
+        condition=UnlessCondition(use_composition),
         actions=[
             SetParameter('use_sim_time', use_sim_time),
             Node(
