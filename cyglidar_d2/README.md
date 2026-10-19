@@ -32,14 +32,6 @@ sudo apt install ros-${ROS2 Distro}-pcl-conversions
 # ex) sudo apt install ros-foxy-pcl-conversions
 ```
 
-### Installation Udev
-Install the udev rule
-```bash
-cd ~/d2_ws/src/cyglidar_d2/scripts
-chmod +x create_udev_rules.sh
-./create_udev_rules.sh
-```
-
 ### Run cyglidar_d2_publisher and View in the Rviz
 ```bash
 ros2 launch cyglidar_d2_ros2 cyglidar.launch.py
@@ -48,10 +40,7 @@ ros2 launch cyglidar_d2_ros2 view_cyglidar.launch.py  (Run with Rviz)
 
 #1 When CyglidarNode Error Occured
 >[Error] : An exception was thrown [open : Permission denied]
-Please check 'Installation Udev' Or use following command.
-```bash
-sudo chmod 777 /dev/ttyUSB0
-```
+Check read/write permissions for the serial port configured in the launch file.
 
 ### ROS2 Launch Parameter
 #### Frame ID

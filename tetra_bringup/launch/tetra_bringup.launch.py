@@ -22,8 +22,11 @@ def generate_launch_description():
     defaults = {
         'use_sim_time': 'false',
         'enable_base': 'true',
-        'enable_interface': 'true',
+        'enable_interface': 'false',
         'enable_lidar': 'true',
+        'use_rviz': 'true',
+        'rviz_config': PathJoinSubstitution([
+            FindPackageShare('tetra_bringup'), 'rviz', 'tetra_bringup.rviz']),
         'use_imu': 'false',
         'enable_joy': 'false',
         'enable_service': 'false',
@@ -59,6 +62,9 @@ def generate_launch_description():
                  'm_bSingle_TF_option': False, 'serial_port': LaunchConfiguration('imu_port')}]),
         Node(package='joy', executable='joy_node', output='screen',
              condition=option('enable_joy'), parameters=[clock, {'deadzone': 0.05}]),
+        Node(package='rviz2', executable='rviz2', output='screen',
+             condition=option('use_rviz'), parameters=[clock],
+             arguments=['-d', LaunchConfiguration('rviz_config')]),
         Node(package='tetra_service', executable='tetra_service', output='screen',
              condition=option('enable_service'), parameters=[clock, {'m_dHome_ID': 0}]),
         Node(package='rosbridge_server', executable='rosbridge_websocket',

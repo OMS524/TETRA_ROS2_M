@@ -33,6 +33,8 @@ class Controller:
         self.step = [0, 0, 0]
         self.emergency = False
         self.fault = False
+        self.servo_enabled = False
+        self.rejected_velocities = []
         self.stop = threading.Event()
         self.worker = threading.Thread(target=self.run, daemon=True)
         self.worker.start()
@@ -64,8 +66,16 @@ class Controller:
                     elif command == 'AA':
                         error = '2' if self.fault else ('1' if self.emergency else '0')
                         self.reply(f'00{error}0{error}00{int(self.emergency)}'.encode())
+                    elif command in ('DB00', 'DB11'):
+                        self.servo_enabled = command == 'DB11'
+                        self.reply(b'0')
+                    elif command.startswith('BE'):
+                        # The physical DS4 rejects BE, including zero, while disabled.
+                        if not self.servo_enabled:
+                            self.rejected_velocities.append(command)
+                        self.reply(b'0' if self.servo_enabled else b'2')
                     else:
-                        assert command.startswith(('BE', 'DB', 'CG', 'XB', 'XD', 'CZ', 'CX')), command
+                        assert command.startswith(('CG', 'XB', 'XD', 'CZ', 'CX')), command
                         self.reply(b'0')
         except Exception as exc:
             self.errors.append(repr(exc))
@@ -101,6 +111,7 @@ def main():
     received = []
     subscription = node.create_subscription(Odometry, 'odom', received.append, qos_profile_sensor_data)
     publisher = node.create_publisher(Twist, 'cmd_vel_nav2', 10)
+    manual_publisher = node.create_publisher(Twist, 'cmd_vel', 10)
     controller = Controller()
     binary = Path(get_package_prefix('tetra')) / 'lib/tetra/tetra'
     log = (work / 'driver.log').open('w')
@@ -108,13 +119,17 @@ def main():
                              '-p', 'm_bEKF_option:=true'],
                             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
 
-    def pump(seconds, angular=None, allow_exit=False):
+    def pump(seconds, angular=None, allow_exit=False, manual_linear=None):
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             if angular is not None:
                 command = Twist()
                 command.angular.z = angular
                 publisher.publish(command)
+            if manual_linear is not None:
+                command = Twist()
+                command.linear.x = manual_linear
+                manual_publisher.publish(command)
             rclpy.spin_once(node, timeout_sec=0.02)
             assert not controller.errors, controller.errors
             if not allow_exit:
@@ -128,6 +143,12 @@ def main():
         assert abs(odom.pose.pose.position.y - 2.0) < 1e-6
         assert abs(odom.pose.pose.orientation.z - math.sqrt(0.5)) < 1e-6
         assert abs(odom.twist.twist.linear.x) < 1e-6, 'Spurious initial speed'
+        first = len(controller.commands)
+        pump(0.7, manual_linear=0.1)
+        assert any(command in ('BE99;99', 'BE100;100')
+                   for command in controller.commands[first:]), '/cmd_vel did not reach motor commands'
+        pump(0.3, manual_linear=0.0)
+        print('PASS: standard /cmd_vel reaches motor commands without remapping', flush=True)
         pump(0.5, angular=0.5)
         assert 'BE-109;109' in controller.commands, 'Wrong DS4-M wheel separation / ASCII velocity'
         controller.step = [0, 10, 0]  # Moving forward in body frame at yaw +90 degrees.
@@ -166,6 +187,7 @@ def main():
         assert proc.wait(timeout=3) == 1, 'Motor fault should terminate driver'
         assert controller.commands[-2:] == ['BE0;0', 'DB00'], 'Missing stop on shutdown'
         assert controller.commands.count('CG') == 1, 'Fault was repeatedly reset'
+        assert not controller.rejected_velocities, 'Velocity was sent while the servo was disabled'
         print('PASS: emergency stop, release without stale command, motor-fault shutdown', flush=True)
         missing = subprocess.run([str(binary), '--ros-args', '-p', f'serial_port:={work / "missing-port"}'],
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=5)

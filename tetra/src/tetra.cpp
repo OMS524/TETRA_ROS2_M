@@ -196,7 +196,7 @@ public:
 		joy_subscriber = this->create_subscription<sensor_msgs::msg::Joy>("joy", rclcpp::SensorDataQoS(), std::bind(&TETRA::joyCallback, this, _1));
 		cmd_vel_subscriber = this->create_subscription<geometry_msgs::msg::Twist>("cmd_vel_nav", rclcpp::SensorDataQoS(), std::bind(&TETRA::velCallback, this, _1));
 		cmd_vel_subscriber2 = this->create_subscription<geometry_msgs::msg::Twist>("cmd_vel_nav2", rclcpp::SensorDataQoS(), std::bind(&TETRA::velCallback2, this, _1));
-		cmd_vel_manual_subscriber = this->create_subscription<geometry_msgs::msg::Twist>("cmd_vel_manual", rclcpp::SensorDataQoS(), std::bind(&TETRA::Manual_velCallback, this, _1));
+		cmd_vel_manual_subscriber = this->create_subscription<geometry_msgs::msg::Twist>("cmd_vel", rclcpp::SensorDataQoS(), std::bind(&TETRA::Manual_velCallback, this, _1));
 		acc_subscriber = this->create_subscription<std_msgs::msg::Int32>("accel_vel", 10, std::bind(&TETRA::accelCallback, this, _1));
 		pose_reset_subscriber = this->create_subscription<std_msgs::msg::Int32>("pose_reset", 10, std::bind(&TETRA::pose_resetCallback, this, _1));
 		servo_on_subscriber = this->create_subscription<std_msgs::msg::Int32>("servo_on", 10, std::bind(&TETRA::servo_onCallback, this, _1));
@@ -726,6 +726,7 @@ int main(int argc, char * argv[])
 		}
 		if (m_emg_state) {
 			if (!m_bflag_emg && dssp_rs232_drv_module_set_servo(0) != 0) {
+				RCLCPP_ERROR(node->get_logger(), "DS4-M servo disable failed during emergency stop");
 				exit_status = 1;
 				break;
 			}
@@ -734,15 +735,23 @@ int main(int argc, char * argv[])
 		} else if (m_bflag_emg) {
 			// Discard commands retained from before the emergency stop.
 			linear = angular = control_linear = control_angular = 0.0;
-			if (dssp_rs232_drv_module_set_velocity(0, 0) != 0 ||
-				dssp_rs232_drv_module_set_servo(1) != 0) {
+			// A physical DS4 rejects BE (even BE0;0) while its servo is off.
+			// Enable first, then explicitly establish the zero-speed target.
+			if (dssp_rs232_drv_module_set_servo(1) != 0) {
+				RCLCPP_ERROR(node->get_logger(), "DS4-M servo enable failed; stopping driver");
+				exit_status = 1;
+				break;
+			}
+			if (dssp_rs232_drv_module_set_velocity(0, 0) != 0) {
+				RCLCPP_ERROR(node->get_logger(), "DS4-M zero-speed command failed after servo enable");
 				exit_status = 1;
 				break;
 			}
 			m_bflag_emg = false;
 		}
 
-		if (!bPosition_mode_flag &&
+		// Do not send velocity commands to a servo disabled by emergency stop.
+		if (!m_emg_state && !bPosition_mode_flag &&
 			node->SetMoveCommand(control_linear, control_angular) != 0) {
 			RCLCPP_ERROR(node->get_logger(), "DS4-M velocity command failed; stopping driver");
 			exit_status = 1;

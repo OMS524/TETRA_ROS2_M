@@ -50,7 +50,7 @@ Tetra 패키지는 Tetra 로봇의 기본 제어 기능을 제공합니다. 이 
 ### 구독 토픽
 - **`/cmd_vel_nav`** (타입: `geometry_msgs/msg/Twist`): 내비게이션 명령을 수신하여 로봇의 속도를 제어합니다.
 - **`/cmd_vel_nav2`** (타입: `geometry_msgs/msg/Twist`): 보조 내비게이션 명령을 수신합니다.
-- **`/cmd_vel_manual`** (타입: `geometry_msgs/msg/Twist`): 수동 속도 명령을 수신합니다.
+- **`/cmd_vel`** (타입: `geometry_msgs/msg/Twist`): 키보드 등 수동 속도 명령을 수신합니다.
 - **`/accel_vel`** (타입: `std_msgs/msg/Int32`): 가속도 데이터를 수신합니다.
 - **`/pose_reset`** (타입: `std_msgs/msg/Int32`): 로봇의 위치를 초기화합니다.
 - **`/servo_on`** (타입: `std_msgs/msg/Int32`): 서보 모터를 활성화합니다.

@@ -56,7 +56,7 @@ def main():
     proc = subprocess.Popen([
         'ros2', 'launch', 'tetra_bringup', 'tetra_bringup.launch.py',
         f'motor_port:={controller.port}',
-        'enable_interface:=false', 'enable_lidar:=false', 'use_imu:=false',
+        'enable_lidar:=false', 'use_imu:=false', 'use_rviz:=false',
     ], stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     try:
         deadline = time.monotonic() + 8
@@ -77,6 +77,7 @@ def main():
         assert any((t.header.stamp.sec, t.header.stamp.nanosec) in stamps for t in odom_transforms)
         names = {name for name, _ in node.get_node_names_and_namespaces()}
         assert 'tetra' in names and 'ekf_filter_node' not in names, names
+        assert 'tetra_interface' not in names, 'Power-board driver should be disabled by default'
         assert node.count_publishers('/odometry/filtered') == 0, 'Unexpected EKF output'
         publishers = node.get_publishers_info_by_topic('/odom')
         assert len(publishers) == 1 and publishers[0].node_name == 'tetra'

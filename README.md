@@ -49,74 +49,37 @@ A2M12 드라이버는 이 저장소 안에 클론한 `sllidar_ros2/`를 함께 �
 빌드하려면 AprilTag, RealSense SDK 등 포함된 패키지의 의존성도 필요합니다.
 `sudo` 암호는 본인 터미널에서 입력하세요. 다른 배포판에서 생성한 build/install을 재사용하지 마세요.
 
-### USB 허브의 세 장치 등록
+### USB 장치 이름 고정 — 최초 한 번 설치
 
-기본 포트는 아래 고정 별칭을 사용합니다. **코드를 빌드하는 것만으로 `/dev/tetra/*`가 생기지는 않습니다.**
-실제 장치를 확인한 뒤 udev 규칙을 한 번 등록해야 합니다.
+장치 식별값을 적어 둔 `scripts/setup_usb.sh` 하나로 규칙을 등록합니다.
+로봇·센서 노드를 종료한 상태에서 최초 한 번 실행하세요. ROS source나 재빌드는 필요 없습니다.
 
-| 연결 대상 | 기본 포트 | launch 인자 |
-|---|---|---|
-| 모터 제어 보드 | `/dev/tetra/motor` | `motor_port` |
-| 전원·입출력 보드 | `/dev/tetra/interface` | `interface_port` |
-| A2M12 라이다 | `/dev/tetra/lidar` | `lidar_port` |
+```bash
+cd ~/tetra_ws/src/TETRA_ROS2_M
+sudo ./scripts/setup_usb.sh
+```
 
-DS4 드라이버는 통신 포트 하나로 좌우 바퀴를 함께 제어합니다. 로봇에서 나온 두 케이블 중
-어느 것이 모터 보드이고 어느 것이 전원·입출력 보드인지 커넥터 / 보드 라벨로 확인하세요.
-두 번째 케이블을 확인 없이 `interface`로 지정하지 않습니다. 전원보드를 연결하지 않은 구성은
-`enable_interface:=false`로 실행할 수 있습니다.
+| 규칙 파일 (`/etc/udev/rules.d/`) | 고정 이름 |
+|---|---|
+| `tetra_motor.rules` | `/dev/tetra/motor` |
+| `tetra_lidar.rules` | `/dev/tetra/lidar` |
 
-1. 로봇 노드를 종료한 상태에서 각 케이블을 구분하고 장치 정보를 조회합니다.
+2026-10-19 실제 연결에서 모터 보드는 `AC0` 엔코더 조회, 전원 보드는 `PV` 배터리 조회로
+구분했습니다. 모터는 당시 `/dev/ttyUSB0`, 전원은 `/dev/ttyUSB2`, 라이다는 `/dev/ttyUSB1`입니다.
+스크립트에는 tty 번호 대신 모터의 `ID_PATH`인 `pci-0000:05:00.4-usb-0:1.2:1.0`과
+현재 라이다의 고유 시리얼 `bb19f6f5d0252745bae134e7d8c48a83`을 기록했습니다.
+두 PL2303의 USB ID는 모두 `067b:2303`이고 라이다는 `10c4:ea60`입니다.
 
-   ```bash
-   cd ~/tetra_ws/src/TETRA_ROS2_M
-   python3 scripts/tetra_usb_ports.py list
-   ```
+설치 이후에는 재연결·재부팅 때 자동 적용됩니다. 물리 경로로 구분하는 모터 보드는
+같은 허브 소켓과 PC USB 포트를 유지하세요. `dialout`에 처음 추가됐다면 다시 로그인합니다.
 
-   도구는 `/dev/ttyUSB*`, `/dev/ttyACM*`의 고유 시리얼·USB 인터페이스·물리 경로·현재 별칭을 표시합니다.
-   케이블을 한 개씩 연결하여 어느 장치가 나타나는지 확인한 뒤 세 개를 모두 연결합니다.
-   USB 장치 번호순으로 역할을 정하지 않습니다. 조회 과정에서 시리얼 포트를 열거나 모터 명령을 보내지 않습니다.
+```bash
+ls -l /dev/tetra/
+```
 
-2. 확인한 세 장치를 지정하여 규칙 파일을 만듭니다. 아래 `ttyUSB_MOTOR`, `ttyUSB_INTERFACE`,
-   `ttyUSB_LIDAR`는 **자리표시자**이므로 1단계에서 확인한 실제 `/dev/ttyUSB숫자` 또는 기존 by-id 경로로 바꾸세요.
-
-   ```bash
-   python3 scripts/tetra_usb_ports.py generate \
-     --motor /dev/ttyUSB_MOTOR \
-     --interface /dev/ttyUSB_INTERFACE \
-     --lidar /dev/ttyUSB_LIDAR \
-     --output /tmp/99-tetra-usb.rules
-   ```
-
-   기본은 제조사·제품·고유 시리얼(가능하면 USB 인터페이스 번호 포함)로 구분합니다.
-   고유 시리얼이 없거나 중복된다면 같은 명령에 `--match path`를 추가하여 물리 포트로 구분합니다.
-   **path 방식은 케이블을 꽂는 허브 소켓과 허브를 연결하는 PC의 USB 포트를 유지해야 합니다.**
-   serial 방식도 USB 변환기를 다른 로봇 보드로 옮기면 역할이 바뀌므로 케이블 라벨을 유지하세요.
-
-   동일 장치에 두 역할을 지정하거나 식별값이 여러 장치와 일치하면 생성을 거부합니다.
-   기존 선배 `initenv.sh`는 두 변환기를 제조사·제품 번호만으로 구분할 수 없어 그대로 실행하지 않습니다.
-   기존 규칙과 별칭이 겹치면 도구가 파일 위치를 표시하므로, 해당 규칙을 백업하고 중복 항목을 정리하세요.
-   생성기는 기존 출력 파일도 덮어쓰지 않습니다. 다시 생성할 때는 새 출력 파일명을 지정하세요.
-
-3. 생성된 내용을 확인한 뒤 설치합니다.
-
-   ```bash
-   cat /tmp/99-tetra-usb.rules
-   sudo install -m 0644 /tmp/99-tetra-usb.rules /etc/udev/rules.d/99-tetra-usb.rules
-   sudo udevadm control --reload-rules
-   sudo usermod -aG dialout "$USER"
-   ```
-
-   로봇 노드가 종료된 상태에서 USB 허브를 분리했다가 다시 연결하고 확인합니다.
-   `dialout` 그룹을 처음 추가했다면 로그아웃 후 다시 로그인하세요.
-
-   ```bash
-   ls -l /dev/tetra/
-   python3 scripts/tetra_usb_ports.py list
-   ```
-
-장치 권한은 `dialout` 그룹의 `0660`으로 설정합니다. 기본값은 통합 bringup, 단독 모터·전원보드
-launch와 실행 파일, 단독 A2M12 launch에 동일하게 적용됩니다. 다른 경로가 필요하면 기존
-`motor_port`, `interface_port`, `lidar_port` 인자 또는 드라이버의 `serial_port` 파라미터로 변경할 수 있습니다.
+이 스크립트는 모터와 라이다의 별칭만 등록하며, 기본 bringup도 이 두 장치를 사용합니다.
+전원 보드를 추가하려면 해당 별칭을 등록하고 `enable_interface:=true`로 실행하세요.
+udev 규칙은 PC 전체에 적용되며, launch의 기본 포트도 위 `/dev/tetra/*`를 사용합니다.
 
 
 ## 실행
@@ -146,7 +109,19 @@ A2M12 기본값은 256000 baud, `Sensitivity`, `angle_compensate=true`, `inverte
 ros2 launch tetra_bringup tetra_bringup.launch.py
 ```
 
-기본 실행: 모터, 전원보드, A2M12, robot_state_publisher. **EKF는 실행하지 않습니다.**
+키보드로 이동하려면 다른 터미널에서 같은 ROS 환경을 적용한 뒤 실행합니다.
+모터 드라이버는 `/cmd_vel`을 직접 구독하므로 토픽 리매핑은 필요 없습니다.
+
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p speed:=0.1 -p turn:=0.3
+```
+
+`i`: 전진, `,`: 후진, `j/l`: 좌/우 회전, `k`: 정지입니다.
+
+기본 실행: 모터, A2M12, robot_state_publisher, RViz2. 전원보드는 기본 비활성입니다. **EKF는 실행하지 않습니다.**
+RViz는 bringup과 같은 ROS 환경에서 실행하며 Grid, 로봇 모델, `/scan`을 표시합니다.
+화면이 필요 없으면 `use_rviz:=false`를 추가합니다. 별도 터미널에서 RViz를 실행할 때도
+`source ~/tetra_ws/install/local_setup.bash`를 적용해야 이 워크스페이스의 모델 파일을 찾습니다.
 모터 드라이버가 `/odom`과 `odom -> base_footprint` TF를 직접 발행하며, Nav2·Cartographer는
 이 `/odom`을 사용합니다. Cartographer 등의 구독과 연결되도록 odom 발행 QoS는 reliable입니다.
 IAHRS를 장착했다면 `use_imu:=true imu_port:=/dev/IMU`로 센서 드라이버를 켤 수 있지만, odom에 융합하지 않습니다.
@@ -154,7 +129,10 @@ IAHRS를 장착했다면 `use_imu:=true imu_port:=/dev/IMU`로 센서 드라이�
 | 인자 | 기본값 | 용도 |
 |---|---|---|
 | `motor_port` / `interface_port` / `lidar_port` | `/dev/tetra/motor` / `/dev/tetra/interface` / `/dev/tetra/lidar` | USB 장치 고정 별칭 |
-| `enable_base`, `enable_interface`, `enable_lidar` | `true` | 본체·전원보드·라이다 실행 |
+| `enable_base`, `enable_lidar` | `true` | 본체·라이다 실행 |
+| `enable_interface` | `false` | 전원·입출력 보드 실행 |
+| `use_rviz` | `true` | RViz2 함께 실행 (`odom` 기준) |
+| `rviz_config` | 패키지의 `rviz/tetra_bringup.rviz` | RViz 표시 설정 |
 | `use_imu` | `false` | IAHRS 센서 드라이버만 실행; odom 융합 없음 |
 | `enable_joy` | `false` | 제조사 조이스틱 입력 사용 |
 | `enable_usb_camera`, `enable_apriltag` | `false` | 카메라와 태그 감지 각각 실행 |
@@ -177,6 +155,8 @@ IAHRS를 장착했다면 `use_imu:=true imu_port:=/dev/IMU`로 센서 드라이�
 ros2 launch tetra_cartographer cartographer.launch.py
 # 화면이 없는 환경: use_rviz:=false 추가
 ```
+
+Cartographer가 여는 SLAM용 RViz 하나만 쓰려면 본체 bringup에 `use_rviz:=false`를 지정합니다.
 
 지도 저장:
 
@@ -229,7 +209,7 @@ progress checker, goal checker, 속도 임계값을 적용했습니다. 원본�
 아래 비교에 정리했습니다. 실제 주행 특성은 제어기와 주변 설정을 함께 조정하여 확인해야 합니다.
 
 모터가 충돌 감시 전 Nav2 명령을 직접 받던 연결을 분리했습니다.
-제조사의 `/cmd_vel_nav` 도킹 입력, `/cmd_vel_manual` 수동 입력과 조이스틱은 별도 경로입니다.
+제조사의 `/cmd_vel_nav` 도킹 입력, `/cmd_vel` 수동 입력과 조이스틱은 별도 경로입니다.
 기본 Nav2 costmap과 충돌 감시는 확인된 A2M12의 `/scan`만 사용합니다.
 추가 카메라·보조 라이다·가상 벽 노드를 켜는 것만으로 costmap 관측원이 추가되지는 않습니다.
 그 센서를 사용하려면 `params_file`로 전달할 설정의 관측원과 TF도 구성해야 합니다.
@@ -282,8 +262,8 @@ AprilTag 도킹은 카메라·태그·충전 스테이션 설치에 맞춘 실�
 | 속도 상한 | 전진 0.3·후진 0.2 m/s·회전 ±1 rad/s 동일; smoother 각가속도는 공식 값 ±1.5 rad/s² 유지 (선배 ±3.2) |
 | velocity smoother | OPEN_LOOP 동일; odom_duration은 공식 값 0.1 s 유지 (선배 0.3 s) |
 | 정지·감속 기능 | 선배에는 별도 collision monitor가 없음. 제조사 기능을 Humble용 고정 정지·감속 영역으로 유지 |
-| 속도 토픽 | 선배 모터는 `/cmd_vel`; 현재 Nav2는 smoother·collision monitor를 거친 `/cmd_vel_nav2`, 수동은 `/cmd_vel_manual` |
-| 기본 전원보드 실행 | 선배 본체 launch에는 미포함, 현재 포함. 미연결 시 `enable_interface:=false` |
+| 속도 토픽 | 선배처럼 수동 입력은 `/cmd_vel`; Nav2는 smoother·collision monitor를 거친 `/cmd_vel_nav2` |
+| 기본 전원보드 실행 | 선배처럼 기본 실행에서 제외. 별칭 등록 후 `enable_interface:=true`로 선택 실행 |
 | 시간·통신 처리 | 실기 시간 false, 선배 EKF 인자 이름 불일치 수정; 포트/응답 오류 확인 및 비상정지·모터 고장 처리 유지 |
 | 부가 기능 | 제조사 서비스·센서 패키지 및 Humble용 BT 유지. 선배 음성·GUI·waypoint 앱은 이식하지 않음 |
 
@@ -344,7 +324,6 @@ python3 tests/humble_bringup_smoke.py
 python3 tests/cartographer_smoke.py
 python3 tests/ds4_model_check.py
 python3 tests/ds4_driver_smoke.py
-python3 tests/test_usb_ports.py
 ```
 
 검사 항목: map_server/AMCL 포함 10개 노드 활성화, 두 navigation 액션 서버,
@@ -356,8 +335,6 @@ reliable QoS, EKF 미실행 및 실제 라이다 TF의 위치·회전 `(3.14, 3.
 Cartographer 검사는 별도 도메인 200에서 가상 `/odom`·TF·스캔을 입력하고 지도와 `map -> odom` TF를 확인합니다.
 DS4 모델 검사는 실제 STL 경계가 Nav2 footprint 안에 있고 정지·감속 영역이 이를 포함하는지 확인합니다.
 DS4 드라이버 검사는 도메인 195의 새 가상 시리얼 포트(`/dev/pts/...`)로 ASCII 명령·단위 변환·각도 경계·비상정지·오류 종료를 확인합니다.
-USB 규칙 검사는 장치 번호 변경·동일 변환기 중복·시리얼 부재·물리 포트 고정·기존 규칙 충돌을
-가상 장치 정보로 확인하며 `/etc/udev`를 수정하지 않습니다.
 이 검사는 실제 이동 정확도·하드웨어 통신·A2M12 실측 장착·제동거리를 검증하지 않습니다.
 
 2026-10-16 로컬 검증 결과 (Ubuntu 22.04 / Humble):
@@ -369,7 +346,7 @@ USB 규칙 검사는 장치 번호 변경·동일 변환기 중복·시리얼 �
 - Cartographer(203): 선배 Lua 로딩, `/odom` 입력, 지도 및 `map -> odom` TF 발행 확인.
 - 클론한 `sllidar_node` 빌드·실행과 A2M12 파라미터 전달 확인. 존재하지 않는 임시 포트로 실행해 장치 접근 없이 연결 구성을 검사했으며 스캔 수신 검사는 아님.
 - DS4 STL 해시·캐스터·모델 외곽과 Costmap·정지·감속 영역 포함 관계 재검사 통과.
-- 앞선 가상 시리얼 DS4 ASCII·단위·각도 경계·비상정지·오류 종료 검사, USB 규칙 검사 10개 통과. 실물 USB 별칭 등록은 별도 필요.
+- 앞선 가상 시리얼 DS4 ASCII·단위·각도 경계·비상정지·오류 종료 검사 통과.
 
 시스템에 없던 공식 Humble 의존성은 `/tmp/tetra-humble-deps`에 압축 해제했고,
 빌드 산출물은 `/tmp/tetra-humble-full`에 생성했습니다. Cartographer는 압축 해제된 패키지의

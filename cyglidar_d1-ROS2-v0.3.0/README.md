@@ -20,14 +20,6 @@ source install/setup.bash
 sudo apt install ros-{ROS2 Ver Name}-pcl-conversions
 ```
 
-### Installation Udev
-Install the udev rule
-```bash
-cd ~/cyglidar_ws/src/cyglidar_d1/scripts
-chmod +x create_udev_rules.sh
-./create_udev_rules.sh
-```
-
 ### Parameters in 'cyglidar.launch.py' File
 In cyglidar.launch, the run mode number can be switched to 0, 1 and 2 for 2D, 3D and Dual(2D/3D)
 
@@ -50,10 +42,7 @@ ros2 launch cyglidar_d1_ros2 view_cyglidar.launch.py  (Run with Rviz)
 
 #1 When CyglidarNode Error Occured
 >[Error] : An exception was thrown [open : Permission denied]
-Please check 'Installation Udev' Or use following command.
-```bash
-sudo chmod 777 /dev/ttyUSB0
-```
+Check read/write permissions for the serial port configured in the launch file.
 
 ### Note
 In Rviz, the fixed frame and the topics for Point Cloud are as follows:

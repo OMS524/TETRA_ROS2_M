@@ -54,7 +54,7 @@ install(TARGETS cyglidar_d2_publisher
 install(DIRECTORY ${CYGLIDAR_SDK_PATH}/include ${CYGLIDAR_ROS_PATH}/include
     DESTINATION include)
 
-install(DIRECTORY launch rviz scripts
+install(DIRECTORY launch rviz
     DESTINATION share/${PROJECT_NAME})
 
 ament_export_include_directories(include)
